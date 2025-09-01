@@ -22,14 +22,93 @@ def decode_hand(strongest_num):
     hand = hands[strongest_num]
     return hand
 
+def evaluate_hand(shared_hand):
+    strongest_hand = 0
+    
+    # rank counts 
+    ranks = []
+    for pair in shared_hand:
+        ranks.append(pair[0])
+    ranks_counts = Counter(ranks)
+
+    # suit counts
+    suits = []
+    for pair in shared_hand:
+        suits.append(pair[1])
+    suits_counts = Counter(suits)
+
+    # sort ranks
+    ranks = list(set(sorted(ranks)))
+
+    # evaluate ranks
+    full_house_flag = 0
+    two_pair_flag = 0 
+    for rank, frequency in ranks_counts.items():
+        if frequency == 4:
+            strongest_hand = max(strongest_hand, 7)
+        elif frequency == 3:
+            if full_house_flag == 1:
+                strongest_hand = max(strongest_hand, 6)
+            else:
+                full_house_flag += 1
+                strongest_hand = max(strongest_hand, 3)
+        elif frequency == 2:
+            if full_house_flag == 1:
+                strongest_hand = max(strongest_hand, 6)
+            elif two_pair_flag == 1:
+                strongest_hand = max(strongest_hand, 2)
+            else:
+                two_pair_flag = 1
+                strongest_hand = max(strongest_hand, 1)
+
+    # evaluate suits
+    for suit, frequency in suits_counts.items():
+        if frequency >= 5:
+            # collect the ranks of this suit
+            flush_cards = [r for (r,s) in shared_hand if s == suit]
+            flush_cards = sorted(set(flush_cards))
+            # check if the ranks form a straight
+            consecutive_flag = 1
+            for i in range(1, len(flush_cards)):
+                if flush_cards[i] - flush_cards[i-1] == 1:
+                    consecutive_flag += 1
+                elif flush_cards[i] != flush_cards[i-1]:
+                    consecutive_flag = 1
+                if consecutive_flag == 5:
+                    strongest_hand = max(strongest_hand, 8)
+            # if no straight found, at least a flush
+            if strongest_hand < 8:
+                strongest_hand = max(strongest_hand, 5)
+
+    # evaluate sorted ranks
+    consecutive_flag = 1
+    for i in range(1,len(ranks)):
+        if i > 4:
+            if set([0, 9, 10, 11, 12]).issubset(ranks):
+                strongest_hand = max(strongest_hand, 4)
+        
+        diff = ranks[i] - ranks[i-1]
+        if diff == 0:
+            continue
+        elif diff == 1:
+            consecutive_flag += 1
+        else:
+            consecutive_flag = 1
+        
+        if consecutive_flag == 5:
+            strongest_hand = max(strongest_hand, 4)
+        
+    return strongest_hand
+    
+
 class Player():
-    def __init__(self, name, money, hand = None, decoded_hand = None, shared_hand = None, strongest_hand = None):
+    def __init__(self, name, money, hand = None, decoded_hand = None, shared_hand = None, decoded_shared_hand = None, strongest_hand = None):
         self.name = name
         self.money = money
         self.hand = hand if hand is not None else []
         self.decoded_hand = decoded_hand if decoded_hand is not None else []
         self.shared_hand = shared_hand if shared_hand is not None else []
-        self.decoded_shared_hand = shared_hand if shared_hand is not None else []
+        self.decoded_shared_hand = [] 
         self.strongest_hand = strongest_hand if strongest_hand is not None else 0
 
     def show_hand(self):
@@ -162,6 +241,8 @@ class Table():
         
         # show own, shared, community hands
         for player in self.players:
+            
+            # cleaning hands
             _temp_list = player.hand + self.upcards
             for card in _temp_list:
                 # print string
@@ -175,67 +256,10 @@ class Table():
             print(f'shared hand {player.decoded_shared_hand}')
             print(f'logic {player.shared_hand}')
             
-            # rank counts 
-            ranks = []
-            for pair in player.shared_hand:
-                ranks.append(pair[0])
-            ranks_counts = Counter(ranks)
-            print(ranks_counts)
-
-            # suit counts
-            suits = []
-            for pair in player.shared_hand:
-                suits.append(pair[1])
-            suits_counts = Counter(suits)
-            print(suits_counts)
-
-            # sort ranks
-            ranks = list(set(sorted(ranks)))
-
-            # evaluate ranks
-            full_house_flag = 0
-            two_pair_flag = 0 
-            for rank, frequency in ranks_counts.items():
-                if frequency == 4:
-                    player.strongest_hand = max(player.strongest_hand, )
-                elif frequency == 3:
-                    if full_house_flag == 1:
-                        player.strongest_hand = max(player.strongest_hand, 6)
-                    else:
-                        full_house_flag += 1
-                        player.strongest_hand = max(player.strongest_hand, 3)
-                elif frequency == 2:
-                    if full_house_flag == 1:
-                        player.strongest_hand = max(player.strongest_hand, 6)
-                    elif two_pair_flag == 1:
-                        player.strongest_hand = max(player.strongest_hand, 2)
-                    else:
-                        two_pair_flag = 1
-                        player.strongest_hand = max(player.strongest_hand, 1)
-
-            # evaluate suits
-            for suits, frequency in suits_counts.items():
-                if frequency >= 5:
-                    player.strongest_hand = max(player.strongest_hand, 5)
-
-            # evaluate sorted ranks
-            consecutive_flag = 1
-            for i in range(1,len(ranks)):
-                if i > 4:
-                    if ranks[i] == 0 and ranks[i-1] == 12 and ranks[i-2] == 11 and ranks[i-3] == 10 and ranks[i-4] == 9:
-                        player.strongest_hand = max(player.strongest_hand, 4)
-                
-                diff = ranks[i] - ranks[i-1]
-                if diff == 0:
-                    continue
-                elif diff == 1:
-                    consecutive_flag += 1
-                else:
-                    consecutive_flag = 1
-                
-                if consecutive_flag == 5:
-                    player.strongest_hand = max(player.strongest_hand, 4)
-
+            
+            # evaluate hands
+            player.strongest_hand = evaluate_hand(player.shared_hand)
+            
             print(f'Player {player.name} has {player.strongest_hand}')
             decoded = decode_hand(player.strongest_hand)
             print(f'Player {player.name} has {decoded}')
@@ -257,11 +281,11 @@ class Table():
         self.upcards = []
         self.decoded_upcards = []
 
+if __name__ == "__main__":
+    p1 = Player('A', 100)
+    p2 = Player('B', 100)
+    p3 = Player('C', 100)
 
-p1 = Player('A', 100)
-p2 = Player('B', 100)
-p3 = Player('C', 100)
-
-players = [p1, p2, p3]
-game_table = Table(players)
-game_table.start()
+    players = [p1, p2, p3]
+    game_table = Table(players)
+    game_table.start()
