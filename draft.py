@@ -99,10 +99,20 @@ def evaluate_hand(shared_hand):
             strongest_hand = max(strongest_hand, 4)
         
     return strongest_hand
+
+def reset_everything():
+    self.burn = []
+    for player in self.players:
+        player.hand = []
+        player.decoded_hand = []
+    self.deck = cards.copy()
+    random.shuffle(self.deck)
+    self.upcards = []
+    self.decoded_upcards = []
     
 
 class Player():
-    def __init__(self, name, money, hand = None, decoded_hand = None, shared_hand = None, decoded_shared_hand = None, strongest_hand = None):
+    def __init__(self, name, money, folded = None, hand = None, decoded_hand = None, shared_hand = None, decoded_shared_hand = None, strongest_hand = None):
         self.name = name
         self.money = money
         self.hand = hand if hand is not None else []
@@ -110,6 +120,8 @@ class Player():
         self.shared_hand = shared_hand if shared_hand is not None else []
         self.decoded_shared_hand = [] 
         self.strongest_hand = strongest_hand if strongest_hand is not None else 0
+        self.folded = folded if folded is not None else 0
+
 
     def show_hand(self):
         return f'{self.name} has {self.decoded_hand}'
@@ -127,7 +139,16 @@ class Table():
     def show_up_cards(self):
         return f'{self.decoded_upcards}'
 
+# Phase 1: Restructure Your Simulator
+# Split your Table.start() into:
+# reset() → initializes deck, deals hole cards, sets phase = preflop.
+# step(action) → advances the game one decision/action at a time.
+# Stop auto-running all the phases; let actions drive transitions.
+
     def start(self):
+        # resets()
+        reset_everything()
+
         self.preflop()
         self.flop()
         self.turn()
@@ -138,7 +159,20 @@ class Table():
         print(self.phase)       
         # shuffle the deck
         random.shuffle(self.deck)
-        
+
+        # small blinds and big blinds
+        number_players = len(players)
+        dealer_index = 0
+        small_blind_index = (dealer_index + 1) % number_players
+        big_blind_index = (dealer_index + 2) % number_players
+        SMALL_BLIND = 10
+        BIG_BLIND = SMALL_BLIND * 2
+        # subtract money from players
+        self.players[small_blind_index].money -= SMALL_BLIND
+        self.players[big_blind_index].money -= BIG_BLIND
+        # add to the pot
+        self.pot += SMALL_BLIND + BIG_BLIND
+
         # give each player 2 cards
         for _ in range(2):
             for player in self.players:
@@ -150,9 +184,61 @@ class Table():
         # show cards for each player:
         for player in self.players:
             print(player.show_hand())
+
+        # decision of players != initial blinds
+        player3_index = big_blind_index = (dealer_index + 3) % number_players
+        for i in range(player3_index, len(number_players)):
+            # has 3 decisions: Fold, Call 2 (match the big blind), or Raise (must be at least 4 total here).
+            decision_preflop = input('Fold(1), Call(2), Raise(3)')
+            if decision_preflop == 1:
+                self.players[i].folded = 1
+            elif decision_preflop == 2:
+                self.players[i].money -= BIG_BLIND
+                self.pot += BIG_BLIND
+            elif decision_preflop == 3:
+                raise_preflop = input(f'How much would you like to raise (min{BIG_BLIND*2})')
+                self.players[i].money -= raise_preflop
+                self.pot += raise_preflop
+                BIG_BLIND = raise_preflop
         
+        # decisions of small player blind
+# If nobody raised yet: they already posted 1, so to Call they only need to add 1 more (to match the Big Blind of 2). 
+# They can also Raise or Fold.
+# If there was a raise: they need to put in enough chips to match that new higher bet.
+        decision_small_blind_player = input(f'Fold(1), Call(2) min needed:{BIG_BLIND-SMALL_BLIND}, Raise(3)')
+        if decision_small_blind_player == 1:
+            self.players[small_blind_index].folded = 1
+        elif decision_small_blind_player == 2:
+            self.players[small_blind_index].money -= BIG_BLIND
+            self.pot += BIG_BLIND
+        elif decision_small_blind_player == 3:
+            raise_preflop = input(f'How much would you like to raise (min{BIG_BLIND*2})')
+            self.players[small_blind_player].money -= raise_preflop
+            self.pot += raise_preflop
+            BIG_BLIND = raise_preflop
+        
+        # decisions of big player blind
+# If nobody raised: the BB already put in 2, so they can Check (do nothing and see the flop).
+# If there was a raise: they must either Fold, Call the raise, or Re-raise.
+        decision_big_blind_player = input(f'Fold(1), Call(2) min needed:{BIG_BLIND-SMALL_BLIND}, Raise(3), Check(4)')
+        if decision_big_blind_player == 1:
+            self.players[big_blind_index].folded = 1
+        elif decision_big_blind_player == 2:
+            self.players[big_blind_index].money -= BIG_BLIND
+            self.pot += BIG_BLIND
+        elif decision_big_blind_player == 3:
+            raise_preflop = input(f'How much would you like to raise (min{BIG_BLIND*2})')
+            self.players[big_blind_index].money -= raise_preflop
+            self.pot += raise_preflop
+            BIG_BLIND = raise_preflop
+        elif decision_big_blind_player == 4:
+            print('Check')
+
+        
+        dealer_index = (dealer_index + 1) % number_players
         # update phase STAGE ENDS
         self.phase = 'flop'
+
     
     def flop(self):
         print(self.phase)       
@@ -272,14 +358,8 @@ class Table():
         # TODO MONEY TRANSFERS
 
         # reset everything
-        self.burn = []
-        for player in self.players:
-            player.hand = []
-            player.decoded_hand = []
-        self.deck = cards.copy()
-        random.shuffle(self.deck)
-        self.upcards = []
-        self.decoded_upcards = []
+
+        reset_everything()
 
 if __name__ == "__main__":
     p1 = Player('A', 100)
